@@ -8,9 +8,9 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname)));
 
-const TOKEN_HOST = 'gateway.eu1.mindsphere.io';
-const TOKEN_PATH = '/api/technicaltokenmanager/v3/oauth/token';
+const TOKEN_HOST = 'hcsntl1-iqfleet-iqops.eu1.mindsphere.io';
 const GATEWAY = 'hcsntl1-iqfleet-iqops.eu1.mindsphere.io';
+const TOKEN_PATH = '/api/technicaltokenmanager/v3/oauth/token';
 
 function makeRequest(hostname, path, token) {
   return new Promise((resolve, reject) => {
