@@ -10,22 +10,23 @@ app.use(express.static(path.join(__dirname)));
 
 const TOKEN_HOST = 'hcsntl1-iqfleet-iqops.eu1.mindsphere.io';
 const GATEWAY = 'hcsntl1-iqfleet-iqops.eu1.mindsphere.io';
-const TOKEN_PATH = '/api/technicaltokenmanager/v3/oauth/token';
 
-function makeRequest(hostname, path, token) {
+function makeRequest(hostname, reqPath, token) {
   return new Promise((resolve, reject) => {
     const options = {
       hostname: hostname,
-      path: path,
+      path: reqPath,
       method: 'GET',
-      headers: token ? { 'Authorization': 'Bearer ' + token } : {}
+      headers: token
+        ? { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' }
+        : { 'Content-Type': 'application/json' }
     };
     const req = https.request(options, (res) => {
-      let body = '';
-      res.on('data', chunk => body += chunk);
+      let data = '';
+      res.on('data', chunk => data += chunk);
       res.on('end', () => {
-        try { resolve({ status: res.statusCode, body: JSON.parse(body) }); }
-        catch(e) { resolve({ status: res.statusCode, body: body }); }
+        try { resolve({ status: res.statusCode, body: JSON.parse(data) }); }
+        catch(e) { resolve({ status: res.statusCode, body: data }); }
       });
     });
     req.on('error', reject);
@@ -35,9 +36,10 @@ function makeRequest(hostname, path, token) {
 
 app.get('/api/token', async (req, res) => {
   try {
+    const apiKey = process.env.DTA_API_KEY;
     const result = await makeRequest(
       TOKEN_HOST,
-      TOKEN_PATH + '?key=' + process.env.DTA_API_KEY
+      '/public/iqtoken/token?key=' + apiKey
     );
     res.status(result.status).json(result.body);
   } catch (err) {
@@ -47,18 +49,27 @@ app.get('/api/token', async (req, res) => {
 
 app.get('/api/siemens/*', async (req, res) => {
   try {
+    const apiKey = process.env.DTA_API_KEY;
+
     const tokenResult = await makeRequest(
       TOKEN_HOST,
-      TOKEN_PATH + '?key=' + process.env.DTA_API_KEY
+      '/public/iqtoken/token?key=' + apiKey
     );
+
+    console.log('Token response status:', tokenResult.status);
+    console.log('Token response body:', JSON.stringify(tokenResult.body));
+
     const token = tokenResult.body.access_token;
     if (!token) {
       return res.status(401).json({ error: 'No token', detail: tokenResult.body });
     }
+
     const siemensPath = req.url.replace('/api/siemens', '');
-    console.log('Proxying to: ' + siemensPath);
+    console.log('Proxying to:', siemensPath);
+
     const result = await makeRequest(GATEWAY, siemensPath, token);
     res.status(result.status).json(result.body);
+
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
