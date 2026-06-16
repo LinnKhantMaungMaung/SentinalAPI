@@ -8,7 +8,7 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname)));
 
-const TOKEN_HOST = 'iqtoken-visualflowcreatorhttp.eul.mindsphere.io';
+const TOKEN_HOST = 'hcsntl1-iqfleet-iqops.eu1.mindsphere.io';
 const GATEWAY = 'gateway.eu1.mindsphere.io';
 
 function makeRequest(hostname, path, token) {
