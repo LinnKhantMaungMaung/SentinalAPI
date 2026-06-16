@@ -1,0 +1,1134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sentinel — Drivetrain Analyzer Dashboard</title>
+<style>
+  :root {
+    --bg: #0d1117;
+    --surface: #161b22;
+    --surface2: #1c2330;
+    --border: #2a3441;
+    --accent: #00c7be;
+    --accent-dim: rgba(0,199,190,0.12);
+    --warn: #f0a500;
+    --danger: #e5534b;
+    --ok: #3fb950;
+    --text: #e6edf3;
+    --text-muted: #768390;
+    --text-dim: #4d5b69;
+    --mono: 'JetBrains Mono', 'Fira Code', 'Courier New', monospace;
+    --sans: 'Inter', 'Segoe UI', system-ui, sans-serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 14px;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* ── Top bar ── */
+  header {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 0 24px;
+    height: 52px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+    flex-shrink: 0;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+  .logo {
+    display: flex; align-items: center; gap: 8px;
+    font-weight: 700; font-size: 15px; letter-spacing: -0.3px;
+    color: var(--text);
+  }
+  .logo-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 8px var(--accent);
+  }
+  .header-spacer { flex: 1; }
+  .status-pill {
+    display: flex; align-items: center; gap: 6px;
+    padding: 4px 10px; border-radius: 20px;
+    font-size: 11px; font-weight: 600; letter-spacing: 0.5px;
+    background: var(--accent-dim);
+    color: var(--accent);
+    border: 1px solid rgba(0,199,190,0.25);
+  }
+  .pulse {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--accent);
+    animation: pulse 2s infinite;
+  }
+  @keyframes pulse {
+    0%,100% { opacity: 1; box-shadow: 0 0 0 0 rgba(0,199,190,0.4); }
+    50% { opacity: 0.7; box-shadow: 0 0 0 4px rgba(0,199,190,0); }
+  }
+  .token-badge {
+    font-size: 11px; color: var(--text-muted);
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 3px 8px;
+    cursor: pointer;
+  }
+  .token-badge:hover { border-color: var(--accent); color: var(--accent); }
+
+  /* ── Nav tabs ── */
+  nav {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    padding: 0 24px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  .tab {
+    padding: 10px 16px;
+    font-size: 13px; font-weight: 500;
+    color: var(--text-muted);
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    transition: color 0.15s, border-color 0.15s;
+    user-select: none;
+    white-space: nowrap;
+  }
+  .tab:hover { color: var(--text); }
+  .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+  .tab-badge {
+    display: inline-flex; align-items: center; justify-content: center;
+    min-width: 18px; height: 16px;
+    background: var(--danger);
+    color: #fff; font-size: 10px; font-weight: 700;
+    border-radius: 8px; padding: 0 4px;
+    margin-left: 5px;
+  }
+
+  /* ── Main layout ── */
+  main {
+    flex: 1;
+    overflow: auto;
+    padding: 24px;
+  }
+
+  .page { display: none; }
+  .page.active { display: block; }
+
+  /* ── Config panel ── */
+  .config-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    max-width: 900px;
+  }
+  .config-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 20px;
+  }
+  .config-card h3 {
+    font-size: 12px; font-weight: 600;
+    letter-spacing: 0.8px; text-transform: uppercase;
+    color: var(--text-muted);
+    margin-bottom: 14px;
+  }
+  .field { margin-bottom: 12px; }
+  .field label {
+    display: block;
+    font-size: 12px; color: var(--text-muted);
+    margin-bottom: 4px;
+  }
+  .field input, .field select, .field textarea {
+    width: 100%;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 8px 10px;
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 13px;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+  .field input:focus, .field select:focus, .field textarea:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(0,199,190,0.12);
+  }
+  .field textarea { font-family: var(--mono); font-size: 12px; resize: vertical; min-height: 60px; }
+  .field input::placeholder { color: var(--text-dim); }
+  .btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 8px 16px;
+    border-radius: 6px;
+    font-size: 13px; font-weight: 600;
+    cursor: pointer; border: none; outline: none;
+    transition: opacity 0.15s, transform 0.1s;
+  }
+  .btn:active { transform: scale(0.97); }
+  .btn-primary { background: var(--accent); color: #000; }
+  .btn-primary:hover { opacity: 0.85; }
+  .btn-ghost {
+    background: transparent;
+    color: var(--text-muted);
+    border: 1px solid var(--border);
+  }
+  .btn-ghost:hover { color: var(--text); border-color: var(--text-muted); }
+  .btn-danger { background: var(--danger); color: #fff; }
+  .btn-danger:hover { opacity: 0.85; }
+
+  .config-actions { display: flex; gap: 8px; margin-top: 16px; }
+
+  /* ── Dashboard overview ── */
+  .section-title {
+    font-size: 11px; font-weight: 600;
+    letter-spacing: 0.8px; text-transform: uppercase;
+    color: var(--text-muted);
+    margin-bottom: 12px;
+  }
+  .kpi-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 12px;
+    margin-bottom: 24px;
+  }
+  .kpi {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px;
+    position: relative;
+    overflow: hidden;
+  }
+  .kpi::after {
+    content: '';
+    position: absolute; top: 0; left: 0; right: 0;
+    height: 2px;
+    background: var(--kpi-color, var(--accent));
+  }
+  .kpi-label { font-size: 11px; color: var(--text-muted); margin-bottom: 6px; }
+  .kpi-value { font-size: 28px; font-weight: 700; line-height: 1; color: var(--text); }
+  .kpi-sub { font-size: 11px; color: var(--text-muted); margin-top: 4px; }
+
+  /* ── Asset table ── */
+  .table-wrap {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+    margin-bottom: 24px;
+  }
+  .table-toolbar {
+    display: flex; align-items: center; gap: 8px;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+  }
+  .search-input {
+    flex: 1;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 6px 10px;
+    color: var(--text);
+    font-size: 13px;
+    outline: none;
+    max-width: 280px;
+  }
+  .search-input:focus { border-color: var(--accent); }
+  .search-input::placeholder { color: var(--text-dim); }
+
+  table { width: 100%; border-collapse: collapse; }
+  thead th {
+    text-align: left;
+    font-size: 11px; font-weight: 600; letter-spacing: 0.5px;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+  }
+  tbody tr {
+    border-bottom: 1px solid var(--border);
+    cursor: pointer;
+    transition: background 0.1s;
+  }
+  tbody tr:last-child { border-bottom: none; }
+  tbody tr:hover { background: var(--surface2); }
+  tbody td { padding: 10px 16px; font-size: 13px; vertical-align: middle; }
+  .td-mono { font-family: var(--mono); font-size: 11px; color: var(--text-muted); }
+
+  .badge {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 2px 8px; border-radius: 4px;
+    font-size: 11px; font-weight: 600;
+  }
+  .badge-ok { background: rgba(63,185,80,0.15); color: var(--ok); }
+  .badge-warn { background: rgba(240,165,0,0.15); color: var(--warn); }
+  .badge-danger { background: rgba(229,83,75,0.15); color: var(--danger); }
+  .badge-unknown { background: rgba(118,131,144,0.15); color: var(--text-muted); }
+  .badge-dot { width: 5px; height: 5px; border-radius: 50%; background: currentColor; }
+
+  /* ── Debug / Raw panel ── */
+  .debug-layout {
+    display: grid;
+    grid-template-columns: 320px 1fr;
+    gap: 16px;
+    height: calc(100vh - 150px);
+  }
+  .debug-sidebar {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    display: flex; flex-direction: column;
+    overflow: hidden;
+  }
+  .debug-sidebar-title {
+    padding: 12px 14px;
+    font-size: 11px; font-weight: 600;
+    letter-spacing: 0.6px; text-transform: uppercase;
+    color: var(--text-muted);
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  .endpoint-list { overflow-y: auto; flex: 1; }
+  .endpoint-item {
+    display: flex; align-items: flex-start; gap: 8px;
+    padding: 10px 14px;
+    cursor: pointer;
+    border-bottom: 1px solid var(--border);
+    transition: background 0.1s;
+    text-decoration: none;
+  }
+  .endpoint-item:hover { background: var(--surface2); }
+  .endpoint-item.active { background: var(--accent-dim); }
+  .method-tag {
+    font-family: var(--mono); font-size: 10px; font-weight: 700;
+    padding: 2px 5px; border-radius: 3px;
+    flex-shrink: 0; margin-top: 1px;
+    background: rgba(0,199,190,0.15); color: var(--accent);
+  }
+  .method-tag.post { background: rgba(240,165,0,0.15); color: var(--warn); }
+  .endpoint-info {}
+  .endpoint-name { font-size: 12px; font-weight: 600; color: var(--text); }
+  .endpoint-path { font-family: var(--mono); font-size: 10px; color: var(--text-muted); margin-top: 2px; word-break: break-all; }
+
+  .debug-main {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    display: flex; flex-direction: column;
+    overflow: hidden;
+  }
+  .debug-toolbar {
+    display: flex; align-items: center; gap: 8px;
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+    flex-wrap: wrap;
+  }
+  .url-display {
+    flex: 1;
+    font-family: var(--mono); font-size: 11px;
+    color: var(--text-muted);
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 6px 10px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .debug-body {
+    flex: 1;
+    overflow: auto;
+    padding: 16px;
+    display: flex; flex-direction: column; gap: 14px;
+  }
+  .debug-section-title {
+    font-size: 11px; font-weight: 600; letter-spacing: 0.6px;
+    text-transform: uppercase; color: var(--text-muted);
+    margin-bottom: 6px;
+  }
+  .code-block {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 12px 14px;
+    font-family: var(--mono); font-size: 11.5px; line-height: 1.65;
+    color: #adbac7;
+    overflow: auto;
+    white-space: pre;
+    position: relative;
+  }
+  .code-block .json-key { color: #7ee787; }
+  .code-block .json-str { color: #a5d6ff; }
+  .code-block .json-num { color: #f2cc60; }
+  .code-block .json-bool { color: var(--warn); }
+  .copy-btn {
+    position: absolute; top: 8px; right: 8px;
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 4px; padding: 3px 8px;
+    font-size: 10px; font-weight: 600; color: var(--text-muted);
+    cursor: pointer;
+    transition: color 0.15s, border-color 0.15s;
+  }
+  .copy-btn:hover { color: var(--accent); border-color: var(--accent); }
+
+  .response-meta {
+    display: flex; gap: 12px; align-items: center; flex-wrap: wrap;
+    padding: 8px 14px;
+    border-top: 1px solid var(--border);
+    flex-shrink: 0;
+    font-size: 11px;
+  }
+  .meta-item { color: var(--text-muted); }
+  .meta-val { color: var(--text); font-weight: 600; margin-left: 4px; }
+  .meta-status-ok { color: var(--ok); font-weight: 700; }
+  .meta-status-err { color: var(--danger); font-weight: 700; }
+
+  .loading-spinner {
+    display: flex; align-items: center; justify-content: center;
+    gap: 10px; padding: 40px;
+    color: var(--text-muted); font-size: 13px;
+  }
+  .spinner {
+    width: 18px; height: 18px;
+    border: 2px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .placeholder-msg {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 8px; padding: 60px 30px; text-align: center;
+    color: var(--text-muted);
+  }
+  .placeholder-msg .icon { font-size: 32px; opacity: 0.4; }
+  .placeholder-msg p { max-width: 260px; font-size: 13px; line-height: 1.5; }
+
+  /* ── Params editor ── */
+  .params-row {
+    display: grid; grid-template-columns: 1fr 1fr;
+    gap: 8px; margin-bottom: 8px;
+  }
+  .param-input {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 6px 10px;
+    color: var(--text);
+    font-family: var(--mono); font-size: 11px;
+    outline: none; width: 100%;
+  }
+  .param-input:focus { border-color: var(--accent); }
+
+  /* ── Scrollbar ── */
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--text-dim); }
+
+  /* ── Modal ── */
+  .modal-overlay {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.7);
+    display: flex; align-items: center; justify-content: center;
+    z-index: 200;
+    display: none;
+  }
+  .modal-overlay.open { display: flex; }
+  .modal {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px;
+    width: 480px; max-width: 95vw;
+  }
+  .modal h3 { font-size: 16px; margin-bottom: 16px; }
+  .modal .field { margin-bottom: 10px; }
+  .modal-actions { display: flex; gap: 8px; margin-top: 20px; justify-content: flex-end; }
+
+  .help-text {
+    font-size: 11px; color: var(--text-muted);
+    margin-top: 4px; line-height: 1.5;
+  }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+
+<!-- Token Modal -->
+<div class="modal-overlay" id="tokenModal">
+  <div class="modal">
+    <h3>🔑 API Configuration</h3>
+    <div class="field">
+      <label>Drivetrain Analyzer API Key</label>
+      <input type="password" id="apiKeyInput" placeholder="Paste your DTA API key here…" />
+      <div class="help-text">Found in Drivetrain Analyzer Cloud → Settings. Used to get a bearer token from <code>iqtoken-visualflowcreatorhttp.eul.mindsphere.io</code></div>
+    </div>
+    <div class="field">
+      <label>Region / Gateway Base URL</label>
+      <input type="text" id="gatewayInput" value="https://gateway.eu1.mindsphere.io" />
+    </div>
+    <div class="field">
+      <label>Bearer Token (optional — paste directly if you already have one)</label>
+      <textarea id="bearerInput" placeholder="eyJhbGciOiJ…" style="height:60px"></textarea>
+      <div class="help-text">If empty, the dashboard will attempt to fetch a token using your API key above.</div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="saveConfig()">Save & Connect</button>
+    </div>
+  </div>
+</div>
+
+<!-- Header -->
+<header>
+  <div class="logo">
+    <div class="logo-dot"></div>
+    Sentinel
+  </div>
+  <span style="color:var(--text-dim);font-size:12px">Drivetrain Analyzer Dashboard</span>
+  <div class="header-spacer"></div>
+  <div class="status-pill" id="connStatus">
+    <div class="pulse"></div>
+    Not connected
+  </div>
+  <button class="token-badge" onclick="openModal()">⚙ Configure API</button>
+</header>
+
+<!-- Nav -->
+<nav>
+  <div class="tab active" onclick="switchTab('overview')">Overview</div>
+  <div class="tab" onclick="switchTab('assets')">Assets</div>
+  <div class="tab" onclick="switchTab('signals')">Signals</div>
+  <div class="tab" onclick="switchTab('events')">
+    Events
+    <span class="tab-badge" id="eventsBadge" style="display:none">0</span>
+  </div>
+  <div class="tab" onclick="switchTab('debug')">Raw API Debug</div>
+  <div class="tab" onclick="switchTab('config')">Config</div>
+</nav>
+
+<!-- Main -->
+<main>
+
+  <!-- OVERVIEW -->
+  <div class="page active" id="page-overview">
+    <div class="section-title">Fleet Status</div>
+    <div class="kpi-row">
+      <div class="kpi" style="--kpi-color:var(--ok)">
+        <div class="kpi-label">Total Assets</div>
+        <div class="kpi-value" id="kpi-total">—</div>
+        <div class="kpi-sub">motors registered</div>
+      </div>
+      <div class="kpi" style="--kpi-color:var(--ok)">
+        <div class="kpi-label">Connected</div>
+        <div class="kpi-value" id="kpi-connected">—</div>
+        <div class="kpi-sub">state = 0</div>
+      </div>
+      <div class="kpi" style="--kpi-color:var(--warn)">
+        <div class="kpi-label">Warnings</div>
+        <div class="kpi-value" id="kpi-warn">—</div>
+        <div class="kpi-sub">condition ≥ 2</div>
+      </div>
+      <div class="kpi" style="--kpi-color:var(--danger)">
+        <div class="kpi-label">Errors</div>
+        <div class="kpi-value" id="kpi-err">—</div>
+        <div class="kpi-sub">condition = 3</div>
+      </div>
+      <div class="kpi" style="--kpi-color:var(--accent)">
+        <div class="kpi-label">Open Events</div>
+        <div class="kpi-value" id="kpi-events">—</div>
+        <div class="kpi-sub">unacknowledged</div>
+      </div>
+    </div>
+    <div id="overview-empty" style="color:var(--text-muted);font-size:13px;padding:20px 0">
+      Configure your API key to load live data, or explore the <strong style="color:var(--accent);cursor:pointer" onclick="switchTab('debug')">Raw API Debug</strong> tab to test endpoints manually.
+    </div>
+  </div>
+
+  <!-- ASSETS -->
+  <div class="page" id="page-assets">
+    <div class="table-wrap">
+      <div class="table-toolbar">
+        <div class="section-title" style="margin:0;flex-shrink:0">Assets</div>
+        <input class="search-input" placeholder="Search name, serial, type…" id="assetSearch" oninput="filterAssets()" />
+        <button class="btn btn-primary" onclick="loadAssets()" style="margin-left:auto">↻ Refresh</button>
+      </div>
+      <div id="assetsTableWrap">
+        <div class="placeholder-msg">
+          <div class="icon">⚡</div>
+          <p>No assets loaded. Connect your API or load some mock data.</p>
+          <button class="btn btn-ghost" style="margin-top:8px" onclick="loadMockAssets()">Load mock data</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SIGNALS -->
+  <div class="page" id="page-signals">
+    <div style="max-width:800px">
+      <div class="section-title">Time Series Query</div>
+      <div class="config-card" style="margin-bottom:16px">
+        <div class="params-row">
+          <div>
+            <div class="field">
+              <label>Asset ID</label>
+              <input type="text" id="sig-assetId" placeholder="789ffa1f911f4cc08e5a8021208d9476" />
+            </div>
+          </div>
+          <div>
+            <div class="field">
+              <label>Aspect Name</label>
+              <input type="text" id="sig-aspect" placeholder="LowFrequency" />
+            </div>
+          </div>
+        </div>
+        <div class="params-row">
+          <div>
+            <div class="field">
+              <label>From</label>
+              <input type="datetime-local" id="sig-from" />
+            </div>
+          </div>
+          <div>
+            <div class="field">
+              <label>To</label>
+              <input type="datetime-local" id="sig-to" />
+            </div>
+          </div>
+        </div>
+        <div class="field">
+          <label>Sort</label>
+          <select id="sig-sort">
+            <option value="desc">Descending (newest first)</option>
+            <option value="asc">Ascending</option>
+          </select>
+        </div>
+        <button class="btn btn-primary" onclick="loadSignals()">Run Query</button>
+      </div>
+      <div id="signalsResult">
+        <div class="placeholder-msg">
+          <div class="icon">📈</div>
+          <p>Enter an asset ID and aspect name, then run the query.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- EVENTS -->
+  <div class="page" id="page-events">
+    <div class="table-wrap">
+      <div class="table-toolbar">
+        <div class="section-title" style="margin:0">Events / Logs</div>
+        <button class="btn btn-primary" onclick="loadEvents()" style="margin-left:auto">↻ Load Events</button>
+      </div>
+      <div id="eventsTableWrap">
+        <div class="placeholder-msg">
+          <div class="icon">🔔</div>
+          <p>Click Load Events to fetch IQFleet notifications from the Event Management API.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- DEBUG -->
+  <div class="page" id="page-debug">
+    <div class="debug-layout">
+      <div class="debug-sidebar">
+        <div class="debug-sidebar-title">Endpoints</div>
+        <div class="endpoint-list" id="endpointList"></div>
+      </div>
+      <div class="debug-main">
+        <div class="debug-toolbar">
+          <span class="method-tag" id="debug-method">GET</span>
+          <div class="url-display" id="debug-url">Select an endpoint →</div>
+          <button class="btn btn-primary" onclick="runDebug()" id="runBtn">▶ Send</button>
+        </div>
+        <div class="debug-body" id="debugBody">
+          <div class="placeholder-msg">
+            <div class="icon">🔬</div>
+            <p>Select an endpoint on the left, fill in any parameters, and click Send to see the raw API response.</p>
+          </div>
+        </div>
+        <div class="response-meta" id="responseMeta" style="display:none"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CONFIG -->
+  <div class="page" id="page-config">
+    <div class="config-grid">
+      <div class="config-card">
+        <h3>Connection</h3>
+        <div class="field">
+          <label>API Key (DTA)</label>
+          <input type="password" id="cfg-apikey" placeholder="••••••••••••" />
+        </div>
+        <div class="field">
+          <label>Gateway Base URL</label>
+          <input type="text" id="cfg-gateway" value="https://gateway.eu1.mindsphere.io" />
+        </div>
+        <div class="field">
+          <label>Token endpoint</label>
+          <input type="text" id="cfg-tokenHost" value="https://iqtoken-visualflowcreatorhttp.eul.mindsphere.io" />
+        </div>
+        <div class="config-actions">
+          <button class="btn btn-primary" onclick="saveConfig()">Save</button>
+          <button class="btn btn-ghost" onclick="testConnection()">Test connection</button>
+        </div>
+      </div>
+      <div class="config-card">
+        <h3>Bearer Token (live)</h3>
+        <div class="field">
+          <label>Current token (masked)</label>
+          <input type="text" id="cfg-token-display" readonly placeholder="No token — configure API key above" style="font-family:var(--mono);font-size:11px" />
+        </div>
+        <div class="field">
+          <label>Paste token manually</label>
+          <textarea id="cfg-token-paste" placeholder="eyJhbGciOiJ…" style="height:80px"></textarea>
+        </div>
+        <div class="config-actions">
+          <button class="btn btn-primary" onclick="setManualToken()">Use pasted token</button>
+          <button class="btn btn-danger" onclick="clearToken()">Clear token</button>
+        </div>
+      </div>
+      <div class="config-card" style="grid-column:1/-1">
+        <h3>API Reference</h3>
+        <p style="font-size:13px;color:var(--text-muted);line-height:1.7">
+          Token endpoint: <code style="color:var(--accent)">GET /public/iqtoken/token?key={apiKey}</code><br>
+          Assets: <code style="color:var(--accent)">GET /api/assetmanagement/v3/assets</code><br>
+          Time Series: <code style="color:var(--accent)">GET /api/iottimeseries/v3/timeseries/{assetId}/{aspect}</code><br>
+          Aggregates: <code style="color:var(--accent)">GET /api/iottsaggregates/v3/aggregates/{assetId}/{aspect}</code><br>
+          Events: <code style="color:var(--accent)">GET /api/eventmanagement/v3/events?filter={...}</code><br><br>
+          <a href="https://developer.siemens.com/dta/api.html" target="_blank">Full DTA API reference ↗</a> &nbsp;|&nbsp;
+          <a href="https://documentation.mindsphere.io/MindSphere/apis/advanced-assetmanagement/api-assetmanagement-overview.html" target="_blank">Asset Management API ↗</a>
+        </p>
+      </div>
+    </div>
+  </div>
+
+</main>
+
+<script>
+// ── State ──
+const state = {
+  apiKey: '',
+  gateway: 'https://gateway.eu1.mindsphere.io',
+  tokenHost: 'https://iqtoken-visualflowcreatorhttp.eul.mindsphere.io',
+  bearerToken: '',
+  assets: [],
+  events: []
+};
+
+// Persist to sessionStorage
+function persist() {
+  sessionStorage.setItem('sentinel_cfg', JSON.stringify({
+    apiKey: state.apiKey,
+    gateway: state.gateway,
+    tokenHost: state.tokenHost,
+    bearerToken: state.bearerToken
+  }));
+}
+function restore() {
+  try {
+    const d = JSON.parse(sessionStorage.getItem('sentinel_cfg') || '{}');
+    Object.assign(state, d);
+    if (state.bearerToken) updateConnStatus(true);
+  } catch(e) {}
+}
+
+// ── Tabs ──
+function switchTab(name) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  event.target.classList.add('active');
+  document.getElementById('page-' + name).classList.add('active');
+  if (name === 'debug') initDebugEndpoints();
+}
+
+// ── Modal ──
+function openModal() {
+  document.getElementById('tokenModal').classList.add('open');
+  document.getElementById('apiKeyInput').value = state.apiKey;
+  document.getElementById('gatewayInput').value = state.gateway;
+}
+function closeModal() {
+  document.getElementById('tokenModal').classList.remove('open');
+}
+function saveConfig() {
+  state.apiKey = document.getElementById('apiKeyInput')?.value || document.getElementById('cfg-apikey')?.value || state.apiKey;
+  state.gateway = document.getElementById('gatewayInput')?.value || document.getElementById('cfg-gateway')?.value || state.gateway;
+  const manual = document.getElementById('bearerInput')?.value?.trim();
+  if (manual) state.bearerToken = manual;
+  persist();
+  updateConnStatus(!!state.bearerToken);
+  closeModal();
+  refreshConfigPage();
+}
+function setManualToken() {
+  const t = document.getElementById('cfg-token-paste').value.trim();
+  if (t) { state.bearerToken = t; persist(); updateConnStatus(true); refreshConfigPage(); }
+}
+function clearToken() {
+  state.bearerToken = '';
+  persist();
+  updateConnStatus(false);
+  refreshConfigPage();
+}
+function refreshConfigPage() {
+  document.getElementById('cfg-gateway').value = state.gateway;
+  if (state.bearerToken) {
+    document.getElementById('cfg-token-display').value = state.bearerToken.slice(0,20) + '…' + state.bearerToken.slice(-8);
+  } else {
+    document.getElementById('cfg-token-display').value = '';
+  }
+}
+function updateConnStatus(connected) {
+  const el = document.getElementById('connStatus');
+  el.textContent = connected ? '● Connected' : '○ Not connected';
+  el.style.color = connected ? 'var(--ok)' : 'var(--text-muted)';
+  el.style.background = connected ? 'rgba(63,185,80,0.1)' : 'var(--accent-dim)';
+  el.style.borderColor = connected ? 'rgba(63,185,80,0.25)' : 'rgba(0,199,190,0.25)';
+}
+
+// ── Helpers ──
+function authHeaders() {
+  return {
+    'Content-Type': 'application/json',
+    'Authorization': `Bearer ${state.bearerToken}`
+  };
+}
+
+async function apiFetch(url, options = {}) {
+  const start = Date.now();
+  try {
+    const res = await fetch(url, {
+      ...options,
+      headers: { ...authHeaders(), ...(options.headers || {}) }
+    });
+    const elapsed = Date.now() - start;
+    let body;
+    const ct = res.headers.get('content-type') || '';
+    if (ct.includes('json')) body = await res.json();
+    else body = await res.text();
+    return { ok: res.ok, status: res.status, body, elapsed, headers: Object.fromEntries(res.headers.entries()) };
+  } catch(e) {
+    return { ok: false, status: 0, body: { error: e.message }, elapsed: Date.now() - start };
+  }
+}
+
+// ── Assets ──
+async function loadAssets() {
+  if (!state.bearerToken) { alert('Configure your bearer token first.'); return; }
+  const wrap = document.getElementById('assetsTableWrap');
+  wrap.innerHTML = `<div class="loading-spinner"><div class="spinner"></div> Fetching assets…</div>`;
+  const r = await apiFetch(`${state.gateway}/api/assetmanagement/v3/assets`);
+  if (!r.ok) { wrap.innerHTML = `<div class="placeholder-msg"><p style="color:var(--danger)">Error ${r.status}: ${JSON.stringify(r.body)}</p></div>`; return; }
+  const items = r.body?._embedded?.assets || r.body?.assets || (Array.isArray(r.body) ? r.body : []);
+  state.assets = items;
+  renderAssetTable(items);
+  updateOverviewKPIs();
+}
+
+function loadMockAssets() {
+  state.assets = [
+    { assetId: 'abc123def456', name: 'Motor Line A-1', typeId: 'Simotics', variables: { Conditionstate: 1, Connectionstate: 0, BearingCondition: 1, OperatingMode: 2, SerialNumber: 'SN-00142' } },
+    { assetId: 'bcd234ef0001', name: 'Motor Line A-2', typeId: 'Simotics', variables: { Conditionstate: 2, Connectionstate: 0, BearingCondition: 2, OperatingMode: 1, SerialNumber: 'SN-00143' } },
+    { assetId: 'cde345gh1234', name: 'Pump Station B', typeId: 'Simotics', variables: { Conditionstate: 3, Connectionstate: 1, BearingCondition: 3, OperatingMode: 1, SerialNumber: 'SN-00201' } },
+    { assetId: 'def456ij5678', name: 'Fan Unit C-1', typeId: 'Simotics', variables: { Conditionstate: 0, Connectionstate: 0, BearingCondition: 0, OperatingMode: 2, SerialNumber: 'SN-00302' } },
+    { assetId: 'efa567kl9012', name: 'Compressor D', typeId: 'Simotics', variables: { Conditionstate: 1, Connectionstate: 2, BearingCondition: 1, OperatingMode: 1, SerialNumber: 'SN-00410' } },
+  ];
+  renderAssetTable(state.assets);
+  updateOverviewKPIs();
+}
+
+const conditionLabels = ['OK','Info','Warning','Error','Unknown'];
+const conditionClasses = ['badge-ok','badge-ok','badge-warn','badge-danger','badge-unknown'];
+const connLabels = ['Connected','Interrupted','Disconnected'];
+const connClasses = ['badge-ok','badge-warn','badge-danger'];
+const bearingLabels = ['Calibrating','OK','Low/Med Risk','High Risk'];
+const bearingClasses = ['badge-unknown','badge-ok','badge-warn','badge-danger'];
+
+function renderAssetTable(items) {
+  if (!items.length) {
+    document.getElementById('assetsTableWrap').innerHTML = `<div class="placeholder-msg"><p>No assets found in tenant.</p></div>`;
+    return;
+  }
+  const rows = items.map(a => {
+    const v = a.variables || {};
+    const cs = parseInt(v.Conditionstate ?? 4);
+    const conn = parseInt(v.Connectionstate ?? 2);
+    const bear = parseInt(v.BearingCondition ?? 0);
+    return `<tr onclick="selectAsset('${a.assetId}')">
+      <td>${a.name || a.assetId}</td>
+      <td class="td-mono">${a.assetId}</td>
+      <td><span class="badge ${conditionClasses[cs]||'badge-unknown'}"><span class="badge-dot"></span>${conditionLabels[cs]||'?'}</span></td>
+      <td><span class="badge ${connClasses[conn]||'badge-unknown'}">${connLabels[conn]||'?'}</span></td>
+      <td><span class="badge ${bearingClasses[bear]||'badge-unknown'}">${bearingLabels[bear]||'?'}</span></td>
+      <td class="td-mono">${v.SerialNumber || '—'}</td>
+      <td class="td-mono">${v.OperatingMode === 2 ? 'VSD' : v.OperatingMode === 1 ? 'DOL' : '—'}</td>
+    </tr>`;
+  }).join('');
+  document.getElementById('assetsTableWrap').innerHTML = `
+    <table>
+      <thead><tr>
+        <th>Name</th><th>Asset ID</th><th>Condition</th><th>Connection</th><th>Bearing</th><th>Serial No.</th><th>Mode</th>
+      </tr></thead>
+      <tbody id="assetsTbody">${rows}</tbody>
+    </table>`;
+}
+function filterAssets() {
+  const q = document.getElementById('assetSearch').value.toLowerCase();
+  const rows = document.querySelectorAll('#assetsTbody tr');
+  rows.forEach(r => { r.style.display = r.textContent.toLowerCase().includes(q) ? '' : 'none'; });
+}
+function selectAsset(id) {
+  document.getElementById('sig-assetId').value = id;
+  switchTabByName('signals');
+}
+function switchTabByName(name) {
+  document.querySelectorAll('.tab').forEach((t,i) => {
+    const names = ['overview','assets','signals','events','debug','config'];
+    t.classList.toggle('active', names[i] === name);
+  });
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.getElementById('page-' + name).classList.add('active');
+}
+function updateOverviewKPIs() {
+  const a = state.assets;
+  document.getElementById('kpi-total').textContent = a.length;
+  document.getElementById('kpi-connected').textContent = a.filter(x => parseInt(x.variables?.Connectionstate) === 0).length;
+  document.getElementById('kpi-warn').textContent = a.filter(x => parseInt(x.variables?.Conditionstate) === 2).length;
+  document.getElementById('kpi-err').textContent = a.filter(x => parseInt(x.variables?.Conditionstate) === 3).length;
+  document.getElementById('kpi-events').textContent = state.events.filter(e => !e.acknowledged).length || '—';
+  document.getElementById('overview-empty').style.display = 'none';
+}
+
+// ── Signals ──
+async function loadSignals() {
+  const assetId = document.getElementById('sig-assetId').value.trim();
+  const aspect = document.getElementById('sig-aspect').value.trim() || 'LowFrequency';
+  const from = document.getElementById('sig-from').value;
+  const to = document.getElementById('sig-to').value;
+  const sort = document.getElementById('sig-sort').value;
+  if (!assetId) { alert('Enter an asset ID.'); return; }
+  const params = new URLSearchParams({ sort });
+  if (from) params.set('from', new Date(from).toISOString());
+  if (to) params.set('to', new Date(to).toISOString());
+  const url = `${state.gateway}/api/iottimeseries/v3/timeseries/${assetId}/${aspect}?${params}`;
+  const wrap = document.getElementById('signalsResult');
+  wrap.innerHTML = `<div class="loading-spinner"><div class="spinner"></div> Querying time series…</div>`;
+  const r = await apiFetch(url);
+  const display = JSON.stringify(r.body, null, 2);
+  wrap.innerHTML = `
+    <div class="debug-section-title">Response — ${r.status} · ${r.elapsed}ms</div>
+    <div class="code-block">${syntaxHighlight(display)}<button class="copy-btn" onclick="copyText(this)">Copy</button></div>`;
+}
+
+// ── Events ──
+async function loadEvents() {
+  if (!state.bearerToken) { alert('Configure bearer token first.'); return; }
+  const filter = encodeURIComponent(JSON.stringify({"and":{"typeId":{"eq":"015578eb-c77a-4f85-8ac7-8fbbd6e1d181"}}}));
+  const url = `${state.gateway}/api/eventmanagement/v3/events?filter=${filter}`;
+  const wrap = document.getElementById('eventsTableWrap');
+  wrap.innerHTML = `<div class="loading-spinner"><div class="spinner"></div> Loading events…</div>`;
+  const r = await apiFetch(url);
+  if (!r.ok) { wrap.innerHTML = `<div class="placeholder-msg"><p style="color:var(--danger)">Error ${r.status}</p><div class="code-block" style="margin-top:12px">${syntaxHighlight(JSON.stringify(r.body,null,2))}</div></div>`; return; }
+  const items = r.body?._embedded?.events || r.body?.events || (Array.isArray(r.body) ? r.body : []);
+  state.events = items;
+  const badge = document.getElementById('eventsBadge');
+  const unack = items.filter(e => !e.acknowledged).length;
+  if (unack > 0) { badge.textContent = unack; badge.style.display = ''; }
+  if (!items.length) { wrap.innerHTML = `<div class="placeholder-msg"><p>No events found.</p></div>`; return; }
+  const rows = items.map(ev => `
+    <tr>
+      <td class="td-mono">${(ev.timestamp||'').replace('T',' ').slice(0,19)}</td>
+      <td>${ev.title || ev.kpiName || '—'}</td>
+      <td><span class="badge ${ev.severity >= 20 ? 'badge-danger' : 'badge-warn'}">${ev.logType||'event'}</span></td>
+      <td>${ev.kpiValue ? ev.kpiValue + ' (threshold: ' + ev.thresholdvalue + ')' : '—'}</td>
+      <td><span class="badge ${ev.acknowledged ? 'badge-ok' : 'badge-warn'}">${ev.acknowledged ? 'ACK' : 'Open'}</span></td>
+    </tr>`).join('');
+  wrap.innerHTML = `<table>
+    <thead><tr><th>Timestamp</th><th>Title</th><th>Type</th><th>Value</th><th>Status</th></tr></thead>
+    <tbody>${rows}</tbody>
+  </table>`;
+}
+
+// ── Debug panel ──
+const ENDPOINTS = [
+  { name: 'Get Bearer Token', method: 'GET', path: '/public/iqtoken/token', host: 'TOKEN', params: [{key:'key', val:'{apiKey}', label:'API Key'}] },
+  { name: 'List Assets', method: 'GET', path: '/api/assetmanagement/v3/assets', params: [{key:'size',val:'10',label:'Page size'},{key:'page',val:'0',label:'Page'}] },
+  { name: 'Get Asset by ID', method: 'GET', path: '/api/assetmanagement/v3/assets/{assetId}', params: [{key:'assetId',val:'',label:'Asset ID (in path)'}] },
+  { name: 'Asset Type: Simotics', method: 'GET', path: '/api/assetmanagement/v3/assettypes/Simotics', params: [] },
+  { name: 'Time Series (LowFrequency)', method: 'GET', path: '/api/iottimeseries/v3/timeseries/{assetId}/LowFrequency', params: [{key:'assetId',val:'',label:'Asset ID (in path)'},{key:'sort',val:'desc',label:'sort'},{key:'limit',val:'20',label:'limit'}] },
+  { name: 'Time Series (HighFrequency)', method: 'GET', path: '/api/iottimeseries/v3/timeseries/{assetId}/HighFrequency', params: [{key:'assetId',val:'',label:'Asset ID (in path)'}] },
+  { name: 'Aggregates (Energy)', method: 'GET', path: '/api/iottsaggregates/v3/aggregates/{assetId}/LowFrequency', params: [{key:'assetId',val:'',label:'Asset ID (in path)'},{key:'select',val:'ElectricalEnergy',label:'select'},{key:'intervalUnit',val:'hour',label:'intervalUnit'},{key:'intervalValue',val:'1',label:'intervalValue'}] },
+  { name: 'Events (IQFleet)', method: 'GET', path: '/api/eventmanagement/v3/events', params: [{key:'filter',val:'{"and":{"typeId":{"eq":"015578eb-c77a-4f85-8ac7-8fbbd6e1d181"}}}',label:'filter (JSON)'}] },
+  { name: 'Events (Comments)', method: 'GET', path: '/api/eventmanagement/v3/events', params: [{key:'filter',val:'{"and":{"typeId":{"eq":"953b4143-fc09-4ebe-a05d-eeb0a5c6af34"}}}',label:'filter (JSON)'}] },
+];
+
+let activeEndpoint = null;
+
+function initDebugEndpoints() {
+  const list = document.getElementById('endpointList');
+  if (list.children.length) return;
+  ENDPOINTS.forEach((ep, i) => {
+    const el = document.createElement('div');
+    el.className = 'endpoint-item';
+    el.innerHTML = `<span class="method-tag">${ep.method}</span><div class="endpoint-info"><div class="endpoint-name">${ep.name}</div><div class="endpoint-path">${ep.path}</div></div>`;
+    el.onclick = () => selectEndpoint(i, el);
+    list.appendChild(el);
+  });
+}
+
+function selectEndpoint(i, el) {
+  document.querySelectorAll('.endpoint-item').forEach(e => e.classList.remove('active'));
+  el.classList.add('active');
+  activeEndpoint = ENDPOINTS[i];
+  document.getElementById('debug-method').textContent = activeEndpoint.method;
+  updateDebugURL();
+  renderDebugParams();
+}
+
+function renderDebugParams() {
+  const body = document.getElementById('debugBody');
+  const params = activeEndpoint.params;
+  let html = `<div>
+    <div class="debug-section-title">Parameters</div>`;
+  if (!params.length) {
+    html += `<div style="color:var(--text-dim);font-size:12px">No parameters for this endpoint.</div>`;
+  } else {
+    params.forEach((p, i) => {
+      html += `<div class="params-row">
+        <input class="param-input" placeholder="key" value="${p.key}" id="param-key-${i}" oninput="updateDebugURL()" readonly />
+        <input class="param-input" placeholder="${p.label}" value="${p.val}" id="param-val-${i}" oninput="updateDebugURL()" />
+      </div>`;
+    });
+  }
+  html += `</div><div id="debugResponseArea"><div class="placeholder-msg"><div class="icon">▶</div><p>Hit Send to fire the request.</p></div></div>`;
+  body.innerHTML = html;
+  updateDebugURL();
+}
+
+function updateDebugURL() {
+  if (!activeEndpoint) return;
+  const base = activeEndpoint.host === 'TOKEN' ? state.tokenHost : state.gateway;
+  let path = activeEndpoint.path;
+  const qs = new URLSearchParams();
+  activeEndpoint.params.forEach((p, i) => {
+    const val = document.getElementById(`param-val-${i}`)?.value || p.val;
+    if (path.includes(`{${p.key}}`)) {
+      path = path.replace(`{${p.key}}`, encodeURIComponent(val));
+    } else if (val) {
+      qs.set(p.key, val);
+    }
+  });
+  const full = `${base}${path}${qs.toString() ? '?' + qs.toString() : ''}`;
+  document.getElementById('debug-url').textContent = full;
+}
+
+async function runDebug() {
+  if (!activeEndpoint) { alert('Select an endpoint first.'); return; }
+  const url = document.getElementById('debug-url').textContent;
+  const btn = document.getElementById('runBtn');
+  btn.textContent = '⏳'; btn.disabled = true;
+
+  let fetchOpts = {};
+  if (activeEndpoint.host !== 'TOKEN') fetchOpts.headers = authHeaders();
+
+  const start = Date.now();
+  let result;
+  try {
+    const res = await fetch(url, fetchOpts);
+    const elapsed = Date.now() - start;
+    const ct = res.headers.get('content-type') || '';
+    const body = ct.includes('json') ? await res.json() : await res.text();
+    result = { ok: res.ok, status: res.status, elapsed, body };
+  } catch(e) {
+    result = { ok: false, status: 0, elapsed: Date.now() - start, body: { error: e.message, tip: 'Check CORS — for real API calls you may need a server-side proxy or Postman.' } };
+  }
+
+  btn.textContent = '▶ Send'; btn.disabled = false;
+
+  const display = typeof result.body === 'string' ? result.body : JSON.stringify(result.body, null, 2);
+  const meta = document.getElementById('responseMeta');
+  meta.style.display = 'flex';
+  meta.innerHTML = `
+    <span class="meta-item">Status: <span class="${result.ok ? 'meta-status-ok' : 'meta-status-err'} meta-val">${result.status || 'ERR'}</span></span>
+    <span class="meta-item">Time: <span class="meta-val">${result.elapsed}ms</span></span>
+    <span class="meta-item">Bytes: <span class="meta-val">${display.length}</span></span>`;
+
+  const area = document.getElementById('debugResponseArea');
+  area.innerHTML = `
+    <div class="debug-section-title">Response Body</div>
+    <div class="code-block" style="max-height:400px">${syntaxHighlight(display)}<button class="copy-btn" onclick="copyText(this)">Copy</button></div>`;
+}
+
+// ── Token test ──
+async function testConnection() {
+  const key = document.getElementById('cfg-apikey').value || state.apiKey;
+  const host = document.getElementById('cfg-tokenHost').value || state.tokenHost;
+  if (!key) { alert('Enter an API key first.'); return; }
+  const url = `${host}/public/iqtoken/token?key=${encodeURIComponent(key)}`;
+  const r = await fetch(url).then(async res => ({ ok: res.ok, status: res.status, body: await res.json() })).catch(e => ({ ok:false, status:0, body:{error:e.message} }));
+  if (r.ok && r.body.access_token) {
+    state.bearerToken = r.body.access_token;
+    persist();
+    updateConnStatus(true);
+    refreshConfigPage();
+    alert('✅ Connected! Token expires in ' + r.body.expires_in + 's');
+  } else {
+    alert('❌ Failed: ' + JSON.stringify(r.body));
+  }
+}
+
+// ── Syntax highlight ──
+function syntaxHighlight(json) {
+  if (typeof json !== 'string') json = JSON.stringify(json, null, 2);
+  json = json.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  return json.replace(/("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g, m => {
+    if (/^"/.test(m)) {
+      if (/:$/.test(m)) return `<span class="json-key">${m}</span>`;
+      return `<span class="json-str">${m}</span>`;
+    }
+    if (/true|false/.test(m)) return `<span class="json-bool">${m}</span>`;
+    if (/null/.test(m)) return `<span style="color:var(--text-dim)">${m}</span>`;
+    return `<span class="json-num">${m}</span>`;
+  });
+}
+
+function copyText(btn) {
+  const code = btn.parentElement;
+  navigator.clipboard.writeText(code.innerText.replace('Copy','').trim());
+  btn.textContent = 'Copied!';
+  setTimeout(() => btn.textContent = 'Copy', 1500);
+}
+
+// ── Init ──
+restore();
+refreshConfigPage();
+
+// Set default signal time range (last 24h)
+const now = new Date();
+const yesterday = new Date(now - 86400000);
+document.getElementById('sig-to').value = now.toISOString().slice(0,16);
+document.getElementById('sig-from').value = yesterday.toISOString().slice(0,16);
+</script>
+</body>
+</html>

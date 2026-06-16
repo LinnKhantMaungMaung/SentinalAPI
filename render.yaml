@@ -1,0 +1,6 @@
+services:
+  - type: web
+    name: sentinel-dashboard
+    runtime: static
+    staticPublishPath: .
+    buildCommand: ""
