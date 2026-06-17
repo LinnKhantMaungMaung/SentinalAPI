@@ -8,8 +8,8 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname)));
 
-const TOKEN_HOST = 'iqtoken-visualflowcreatorhttp.eul.mindsphere.io';
-const GATEWAY = 'gateway.eu1.mindsphere.io';
+const TOKEN_HOST = 'hcsntl1-iqfleet-iqops.eul.mindsphere.io';
+const GATEWAY = 'hcsntl1-iqfleet-iqops.eul.mindsphere.io';
 
 function makeRequest(hostname, reqPath, token) {
   return new Promise((resolve, reject) => {
@@ -39,7 +39,7 @@ app.get('/api/token', async (req, res) => {
     const apiKey = process.env.DTA_API_KEY;
     const result = await makeRequest(
       TOKEN_HOST,
-      '/public/iqtoken/token?key=' + process.env.DTA_API_KEY
+      '/public/iqtoken/token?key=' + apiKey
     );
     res.status(result.status).json(result.body);
   } catch (err) {
